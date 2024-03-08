@@ -6,7 +6,7 @@ The parser requires `Python>=3.9` for type annotations. `pyntcloud` package work
 
 ## Parsing the data
 
-It is recommended to place all the bag files inside the [data](../social_nav/data) directory as depicted in the project structure below. Otherwise, you need to change `bags_dir` variable in the [parser config file](../social_nav/conf/parser.yaml). You can also change other parameters inside the config files.
+It is recommended to place all the bag files inside the [data](../VANP/data) directory as depicted in the project structure below. Otherwise, you need to change `bags_dir` variable in the [parser config file](../VANP/conf/parser.yaml). You can also change other parameters inside the config files.
 
 Project structure:
 ```
@@ -63,15 +63,15 @@ To run the MuSoHu parser, from the root directory of the project run:
 ./run.sh parser musohu
 ```
 
-And to run SCAND parser, change the parser argument to `scand` like:
+To run SCAND parser, change the parser argument to `scand` like:
 ```bash
 ./run.sh parser scand
 ```
-We only store the front facing camera for the Spot in SCAND, so both MuSoHu and SCAND have the *same* interface. The only difference is that SCAND does not contain depth data.
+We only store the front-facing camera for the Spot in SCAND, so both MuSoHu and SCAND have the *same* interface. The only difference is that SCAND does not contain depth data.
 
 ## Creating Samples
 To create samples from parsed bags, run the following command:
 ```bash
 ./run.sh parser sampler
 ```
-Sampler uses the [parser config](../social_nav/conf/parser.yaml) file to create samples. The sampler uses the observation length (`obs_len`) and prediction length (`pred_len`) from the parser config file to create samples. It uses the directory for storing the pickle file from `parsed_dir`.
+The sampler uses the [parser config](../social_nav/conf/parser.yaml) file to create samples. The sampler uses the observation length (`obs_len`) and prediction length (`pred_len`) from the parser config file to create samples. It uses the directory for storing the pickle file from `parsed_dir`.
