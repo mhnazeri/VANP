@@ -11,7 +11,7 @@ train_params:
   visualize_every: 1
   unfreeze_after: 1  # unfreeze action backbone
   base_lr: 0.2
-  loss: vicreg # for pretext task
+  loss: vicreg # for pretext task Options: vicreg, barlow
   loss_type_dt: mse # Options: ['mse', 'mse+'] (for downstream task)
   temp_loss_lambda: 0.3 # weighting the temporal loss
   loss_lambda: 0.7 # weight for effectiveness of each term in pretext loss
@@ -21,7 +21,7 @@ train_params:
 logger:
   workspace: General # workspace name
   project: VANP # project name
-  experiment_name: "exp11-goalinput" # name of the experiment
+  experiment_name: "exp11" # name of the experiment
   tags: "train"
   resume: False # (boolean) whether to resume training or not
   online: True # (boolean) whether to store logs online or not
@@ -62,7 +62,7 @@ val_dataset:
 # directories
 directory:
   model_name: "pretext18_exp4" # file name for saved model
-  save: /home/robotixx/Projects/VAM/VAM/checkpoint/pretext
+  save: VAM/checkpoint/pretext
   load: ""
 
 # models parameters
