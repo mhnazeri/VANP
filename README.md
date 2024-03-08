@@ -25,7 +25,7 @@ pip install -r requirements.txt
 To set up Comet.Ml follow the [official documentations](https://www.comet.ml/docs/).
 
 ## Dataset
-To download and the dataset please follow [this](docs/data_parser.md) guide.
+Please follow [this](docs/data_parser.md) guide to download the dataset.
 
 ## Training
 To run pretext training (edit [config](VANP/conf/config_pretext.yaml) first):
@@ -42,7 +42,7 @@ pedestrians, cars, trash cans, doors, and other relevant elements.
 ![Sample outputs](docs/samples/sample1.jpg)
 
 However, the model sometimes fails to pay attention to the important regions affecting the trajectory. 
-We can see activations on sky or lots of unnecessary activations:
+We can see activations in the sky or lots of unnecessary activations:
 
 ![Sample outputs](docs/samples/sample2.jpg)
 
