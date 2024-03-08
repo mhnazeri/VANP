@@ -1,6 +1,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-The official implementation of "VANP: A Self-Supervised Vision-Action Model for Visual Navigation Pre-Training".
+The official PyTorch implementation of "Learning Where to See for Navigation: A Self-Supervised Vision-Action Pre-Training Approach".
 
 ## Installation
 Main libraries:
@@ -28,6 +28,19 @@ To run pretext training (edit [config](VANP/conf/config_pretext.yaml) first):
 ```bash
 ./run.sh train
 ```
+
+## Sample Outputs
+Unlike ImageNet weights which primarily focus on a single salient object within the environment, regardless of its distance, 
+the proposed VANP demonstrates greater accuracy in attending to multiple nearby 
+objects that directly influence the robot's trajectory by activating regions corresponding to 
+pedestrians, cars, trash cans, doors, and other relevant elements.
+
+![Sample outputs](docs/samples/sample1.jpg)
+
+However, the model sometimes fails to pay attention to the important regions affecting the trajectory. 
+We can see activations on sky or lots of unnecessary activations:
+
+![Sample outputs](docs/samples/sample2.jpg)
 
 ## Acknowledgements
 Thanks for [GNM](https://github.com/PrieureDeSion/drive-any-robot), [VICreg](https://github.com/facebookresearch/vicreg/tree/main), and [Barlow](https://github.com/facebookresearch/barlowtwins) papers for making their code public.
