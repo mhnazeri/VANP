@@ -2,6 +2,10 @@
 
 The official PyTorch implementation of "Learning Where to See for Navigation: A Self-Supervised Vision-Action Pre-Training Approach".
 
+<p align="center">
+  <img src="docs/VANP.svg"  height="150" width="600"/>
+</p>
+
 ## Installation
 Main libraries:
 * [PyTorch](https://www.pytorch.org/): as the main ML framework
