@@ -1,0 +1,171 @@
+# Training parameters
+train_params:
+  debug: True # use during development
+  epochs: 200
+  seed: 1372 # fixing random seed
+  device: cuda:0 # device name, values: "cpu" or "cuda:x" where 'x' is gpu index, or "cuda:a" to use all GPUs
+  optimizer: adamw
+  save_every: 100
+  grad_clipping: 0 # set to zero to disable grad clipping
+  start_saving_best: 9 # start epoch of saving best model
+  visualize_every: 1
+  unfreeze_after: 1  # unfreeze action backbone
+  base_lr: 0.2
+  loss: vicreg # for pretext task
+  loss_type_dt: mse # Options: ['mse', 'mse+'] (for downstream task)
+  temp_loss_lambda: 0.3 # weighting the temporal loss
+  loss_lambda: 0.7 # weight for effectiveness of each term in pretext loss
+  train_dt: 10 # train downstream task every train_dt epochs
+
+# Logger parameters
+logger:
+  workspace: General # workspace name
+  project: VANP # project name
+  experiment_name: "exp11-goalinput" # name of the experiment
+  tags: "train"
+  resume: False # (boolean) whether to resume training or not
+  online: True # (boolean) whether to store logs online or not
+  experiment_key: "" # can be retrieved from logger dashboard, available if only resuming
+  offline_directory: "./logs" # where to store log data
+  disabled: False # disable the comet ml
+  upload_model: False # upload model to comet
+  log_env_details: False
+
+# Dataloader parameters
+dataloader:
+  num_workers: 16 # Allowing multi-processing
+  batch_size: 128
+  shuffle: True # whether to shuffle data or not
+  pin_memory: True # use pageable memory or pinned memory (https://developer.nvidia.com/blog/how-optimize-data-transfers-cuda-cc/)
+
+# Train dataset parameters
+dataset:
+  root: Data/Train/samples_6_20.pkl # samples.pkl directory
+  train: True # train data
+  metric_waypoint_spacing: 1.0
+  only_non_linear: False  # whether to train on non-linear trajectories or not
+  resize:
+    - 98 # height
+    - 126 # width
+
+# Validation dataset parameters/ only change parameters that are different from train data
+val_dataset:
+  root: Data/Valid/samples_6_20.pkl # samples.pkl directory
+  train: False
+  metric_waypoint_spacing: ${dataset.metric_waypoint_spacing}
+  only_non_linear: False  # whether to train on non-linear trajectories or not
+  resize:
+    - ${dataset.resize[0]} # height
+    - ${dataset.resize[1]} # width
+
+
+# directories
+directory:
+  model_name: "pretext18_exp4" # file name for saved model
+  save: /home/robotixx/Projects/VAM/VAM/checkpoint/pretext
+  load: ""
+
+# models parameters
+model:
+  action_encoder_type: attn # Encoder can be either 'vae' for VariationalAutoEncoder, 'attn' for self-attention, 'mlp' for mlp
+  action_type: xy # whether to use low-level actions 'vw' or future poses 'xy'. options: ['vw', 'xy']
+  action_backbone_weights: null # /home/robotixx/Projects/VAM/VAM/checkpoint/action_encoder/exp7-registers--attn-xy-01-11-12-42/exp7-registers--attn-xy-01-11-12-42-E30.pth # weights address
+  freeze_action_backbone: False # whether to freeze the weights during training or not
+  pred_len: 20 # future observation length
+  obs_len: 6 # observation length
+  action_size: 2 # action space dim
+  feature_size: 512
+  projection_dim: 1024 #8192
+  hidden_dim: 1024 #8192
+  lamda: 0.0051  # for barlow loss
+  n_registers: 4 # number of registers for transformer
+  nhead: 4 # number of heads for transformer
+  num_layers: 4 # number of layers for transformer
+  corr_neg_one: False # inspired by HSIC encouraging off_diag to be negative ones
+  attn: # for action head
+    context_size: 128 # d_model for the transformer
+    nhead: 4 # number of heads for mha (if aggregation is attn)
+    d_hid: 1024 # dimensionality of the hidden layers
+    num_layers: 4  # the number of sub-encoder-layers in the encoder
+    dropout: 0.4  # dropout rate
+    n_registers: 4  # the number of registers
+  img_backbone:
+    name: resnet50 # options = ['dino', 'efficientnet_b0', 'resnet18', 'resnet34', 'resnet50']
+    pretrained: False
+  action_backbone:
+    dims: [256,512,1024,2048,4096, 2048] # MLP dimensions.
+    act: leakyrelu # type of activation function. Valid values: [relu, tanh, sigmoid, elu]
+    l_act: False # use activation function on the last layer or just return scores/logits?
+    bn: True # use batchnorm?
+    dropout: 0.2
+    bias: False
+  vae_encoder: # VAE config for action encoder
+    hidden_dim: 256
+    latent_dim: 512
+
+model_downstream:
+  action_type: ${model.action_type}  # whether to use low-level actions 'vw' or future poses 'xy'. options: ['vw', 'xy']
+  pred_len: ${model.pred_len} # action prediction length
+  obs_len: ${model.obs_len} # observation length
+  action_size: ${model.action_size} # action space dim is 2 if using 'vw', 3 for 'xy, yaw', 4 for 'xy, sin(yaw), cos(yaw)'
+  policy: attn # controller policy can be either 'avg' for average_pooling, 'attn' for self-attention, 'mlp' for mlp
+  obs_context_size: ${model.feature_size}
+  nhead: ${model.nhead} # number of heads for mha (if aggregation is attn)
+  d_hid: ${model.hidden_dim} # dimensionality of the hidden layers
+  num_layers: ${model.num_layers}  # the number of sub-encoder-layers in the encoder
+  dropout: 0.4  # dropout rate
+  n_registers: ${model.n_registers}  # the number of registers
+  goal_encoder:
+    dims: [64,256] # MLP dimensions.
+    act: leakyrelu # type of activation function. Valid values: [relu, tanh, sigmoid, elu]
+    l_act: False # use activation function on the last layer or just return scores/logits?
+    bn: True # use batchnorm?
+    dropout: 0.2
+    bias: False
+  controller:
+    dims: [256, 64]
+    act: leakyrelu # type of activation function. Valid values: [leakyrelu, tanh, sigmoid, elu]
+    l_act: False # use activation function on the last layer or just return scores/logits?
+    bn: False # use batchnorm?
+    dropout: 0.2
+    bias: False
+  image_encoder:
+    name: resnet50 # options = ['dino', 'resnet18', 'resnet34', 'resnet50', 'vanp18', 'swin_v2_s', 'vit_b_16', 'efficientnet_v2_s']
+    weights: DEFAULT # valid for models from torchvision, options: DEFAULT, null
+    vanp_weights: VAM/checkpoint/vanp/exp6-resnet50-pretrained-01-08-15-17-E1000.pth  # pass in the VANP weight path
+    freeze_weights: True # whether to freeze weights during downstream training or not (to finetune, set this to False)
+
+barlow_loss:
+  lamda: 0.0051
+  corr_neg_one: False
+  projection_dim: 512
+
+vicreg_loss:
+  sim_coeff: 25.0
+  std_coeff: 25.0
+  cov_coeff: 1.0
+# model initializer
+init_model:
+  method: "kaiming_normal" # kaiming_normal, kaiming_uniform, normal, uniform, xavier_normal, xavier_uniform
+  mean: 0.0 # mean of normal distribution
+  std: 1.0 # standard deviation for normal distribution
+  low: 0.0 # minimum threshold for uniform distribution
+  high: 1.0 # maximum threshold for uniform distribution
+  mode: "fan_in" # either 'fan_in' (default) or 'fan_out'. Choosing 'fan_in' preserves the magnitude of the variance of the weights in the forward pass. Choosing 'fan_out' preserves the magnitudes in the backwards pass.
+  nonlinearity: "leaky_relu" # the non-linear function (nn.functional name), recommended to use only with 'relu' or 'leaky_relu' (default).
+  gain: 1.0 # an optional scaling factor for xavier initialization
+
+LARS:
+  learning_rate_weights: 0.2 # base learning rate for weights
+  learning_rate_biases: 0.0048 # base learning rate for biases and batch norm parameters
+  weight_decay: 1e-6
+
+# AdamW parameters if using AdamW optimizer
+adamw:
+  lr: 5e-4
+  betas:
+    - 0.9
+    - 0.999
+  eps: 1e-8
+  weight_decay: 0
+  amsgrad: False
