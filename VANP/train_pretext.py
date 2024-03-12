@@ -128,7 +128,7 @@ class Learner:
             for data in bar:
                 self.iteration += 1
                 with self.logger.train():
-                    (loss, repr_loss, std_loss, cov_loss, grad_norm), t_train = (
+                    (loss, grad_norm), t_train = (
                         self.forward_batch(data)
                     )
                     t_train /= self.data.batch_size
@@ -138,18 +138,12 @@ class Learner:
                         loss=loss,
                         Grad_Norm=grad_norm,
                         Time=t_train,
-                        repr_loss=repr_loss,
-                        std_loss=std_loss,
-                        cov_loss=cov_loss,
                     )
 
                     self.logger.log_metrics(
                         {
                             "batch_loss": loss,
                             "grad_norm": grad_norm,
-                            "repr_loss": repr_loss,
-                            "std_loss": std_loss,
-                            "cov_loss": cov_loss,
                         },
                         epoch=self.epoch,
                         step=self.iteration,
@@ -330,10 +324,10 @@ class Learner:
         _, img_z, action_z, future_frame_z = self.pretext_model(
             past_frames, future_frame, future_actions
         )
-        loss_vision, (repr_loss, std_loss, cov_loss) = self.criterion(
+        loss_vision = self.criterion(
             img_z, future_frame_z
         )
-        loss_action, (repr_loss_a, std_loss_a, cov_loss_a) = self.criterion(
+        loss_action = self.criterion(
             img_z, action_z
         )
         loss = (
@@ -354,9 +348,6 @@ class Learner:
         grad_norm = check_grad_norm(self.pretext_model)
         return (
             loss.detach().item(),
-            repr_loss.item() + repr_loss_a.item(),
-            std_loss.item() + std_loss_a.item(),
-            cov_loss.item() + cov_loss_a.item(),
             grad_norm,
         )
 

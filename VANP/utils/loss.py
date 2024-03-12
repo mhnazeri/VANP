@@ -43,7 +43,7 @@ def vicreg_loss(
     ).pow_(2).sum().div_(z2.shape[1])
 
     loss = sim_coeff * repr_loss + std_coeff * std_loss + cov_coeff * cov_loss
-    return loss, (repr_loss, std_loss, cov_loss)
+    return loss
 
 
 def off_diagonal(x):
