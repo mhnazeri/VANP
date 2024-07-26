@@ -3,6 +3,7 @@ from datetime import datetime
 import sys
 import argparse
 from functools import partial
+import copy
 
 try:
     sys.path.append(str(Path(".").resolve()))
@@ -11,7 +12,7 @@ except Exception as e:
 
 from rich import print
 import comet_ml
-from comet_ml.integration.pytorch import log_model
+from comet_ml.integration.pytorch import log_model, watch
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -20,6 +21,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import torch
 from torchvision import models
+from torchvision.utils import make_grid
 from torch.utils.data import DataLoader, Subset
 from icecream import ic, install
 
@@ -66,24 +68,33 @@ class Learner:
         torch.random.manual_seed(self.cfg.train_params.seed)
         torch.cuda.manual_seed(self.cfg.train_params.seed)
         torch.cuda.manual_seed_all(self.cfg.train_params.seed)
+        torch.backends.cudnn.benchmark = True
         # creating dataset interface and dataloader for trained data
         self.data, self.val_data = self.init_dataloader()
         # create model and initialize its weights and move them to the device
         self.model, self.pretext_model = self.init_model(self.cfg.model)
+        self.update_weights()
+        self.logger.log_code(folder="./VANP/model")
+        watch(self.pretext_model, log_step_interval=100)
+        num_params = [x.numel() for x in self.model.parameters()]
         trainable_params = [
             x.numel() for x in self.model.parameters() if x.requires_grad
         ]
+        print(f"{datetime.now():%Y-%m-%d %H:%M:%S} - Number of parameters: {sum(num_params) / 1e6:.2f}M")
         print(
-            f"{datetime.now():%Y-%m-%d %H:%M:%S} - Number of trainable parameters: {sum(trainable_params)}"
+            f"{datetime.now():%Y-%m-%d %H:%M:%S} - Number of trainable parameters: {sum(trainable_params) / 1e6:.2f}M"
         )
         # initialize the optimizer
         ## remove duplicate terms
         params = set(self.model.parameters()) | set(self.pretext_model.parameters())
         self.optimizer = torch.optim.AdamW(
             # list(self.model.parameters()) + list(self.pretext_model.parameters()),
-            params,
-            **self.cfg.adamw,
-        )
+            filter(lambda p: p.requires_grad, self.pretext_model.parameters()),
+            **self.cfg.adamw)
+        self.optimizer_dt = torch.optim.SGD(
+            # list(self.model.parameters()) + list(self.pretext_model.parameters()),
+            filter(lambda p: p.requires_grad, self.model.parameters()),
+            **self.cfg.sgd)
         # criterion
         self.criterion = (
             partial(barlow_loss, **self.cfg.barlow_loss)
@@ -95,7 +106,7 @@ class Learner:
         )
         # initialize the learning rate scheduler
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer, T_max=self.cfg.train_params.epochs
+            self.optimizer_dt, T_max=self.cfg.train_params.epochs
         )
         # if resuming, load the checkpoint
         self.if_resume()
@@ -128,7 +139,7 @@ class Learner:
             for data in bar:
                 self.iteration += 1
                 with self.logger.train():
-                    (loss, grad_norm), t_train = (
+                    (loss, repr_loss, std_loss, cov_loss,grad_norm), t_train = (
                         self.forward_batch(data)
                     )
                     t_train /= self.data.batch_size
@@ -138,12 +149,18 @@ class Learner:
                         loss=loss,
                         Grad_Norm=grad_norm,
                         Time=t_train,
+                        repr_loss=repr_loss,
+                        std_loss=std_loss,
+                        cov_loss=cov_loss
                     )
 
                     self.logger.log_metrics(
                         {
                             "batch_loss": loss,
                             "grad_norm": grad_norm,
+                            "repr_loss": repr_loss,
+                            "std_loss": std_loss,
+                            "cov_loss": cov_loss
                         },
                         epoch=self.epoch,
                         step=self.iteration,
@@ -154,7 +171,7 @@ class Learner:
                 with torch.no_grad():
                     self.pretext_model.eval()
                     activation = {}
-                    self.pretext_model.img_backbone.layer4[-1].register_forward_hook(
+                    self.pretext_model.img_backbone.layer4[-1].relu.register_forward_hook(
                         get_activation(activation, "conv3")
                     )
                     past_frames = [x.to(self.device) for x in data["past_frames"]]
@@ -163,7 +180,7 @@ class Learner:
                         attentions = activation["conv3"][idx].unsqueeze(0).detach()
                         attentions = np.mean(
                             torch.nn.functional.interpolate(
-                                attentions, scale_factor=(60, 80), mode="bicubic"
+                                attentions, scale_factor=(data['original_frame'][idx].shape[-3]/attentions.shape[-2], data['original_frame'][idx].shape[-2]/attentions.shape[-1]), mode="bicubic"
                             )
                             .squeeze()
                             .cpu()
@@ -183,7 +200,7 @@ class Learner:
                         plt.close()
                         full_images = list(img[idx] for img in data["past_frames"])
                         full_images.append(data["future_frame"][idx])
-                        full_images = torch.cat(full_images, dim=-1)
+                        full_images = make_grid(full_images)
                         self.logger.log_image(
                             full_images,
                             name=f"sample_E{self.epoch:03}|S{idx:03}_fullimage",
@@ -210,14 +227,8 @@ class Learner:
             # train downstream task every train_dt epochs
             if self.epoch % self.cfg.train_params.train_dt == 0:
                 # update the model
+                self.update_weights()
                 self.model.train()
-                self.pretext_model.requires_grad_(
-                    False
-                )  # freeze the weights for the backbone
-                self.model.image_encoder = self.pretext_model.img_backbone
-                self.model.image_compressor = self.pretext_model.image_compressor
-                self.model.image_compressor.eval()
-                self.model.image_encoder.eval()
                 for i in range(10):  # train downstream head for 10 epochs
                     # load data again
                     bar = tqdm(
@@ -317,24 +328,20 @@ class Learner:
                     dim=-1,
                 )
 
-        if self.cfg.model.action_encoder_type in "mlp vae":
+        if self.cfg.model.action_encoder_type in "mlp":
             future_actions = future_actions.view(future_actions.shape[0], -1)
 
         # forward, backward
         _, img_z, action_z, future_frame_z = self.pretext_model(
             past_frames, future_frame, future_actions
         )
-        loss_vision = self.criterion(
-            img_z, future_frame_z
-        )
-        loss_action = self.criterion(
-            img_z, action_z
-        )
+        loss_vision, (repr_loss, std_loss, cov_loss) = self.criterion(img_z, future_frame_z)
+        loss_action, (repr_loss_a, std_loss_a, cov_loss_a) = self.criterion(img_z, action_z)
         loss = (
             self.cfg.train_params.loss_lambda * loss_vision
             + (1 - self.cfg.train_params.loss_lambda) * loss_action
         )
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
         # gradient clipping
         if self.cfg.train_params.grad_clipping > 0:
@@ -342,18 +349,18 @@ class Learner:
                 self.pretext_model.parameters(), self.cfg.train_params.grad_clipping
             )
         # update
-        self.optimizer.step()
+        if (self.iteration + 1) % self.cfg.train_params.accumulation_steps == 0:
+            self.optimizer.step()
+            self.optimizer.zero_grad(set_to_none=True)
 
         # check grad norm for debugging
         grad_norm = check_grad_norm(self.pretext_model)
-        return (
-            loss.detach().item(),
-            grad_norm,
-        )
+        return loss.detach().item(), repr_loss.item() + repr_loss_a.item(), std_loss.item() + std_loss_a.item(), cov_loss.item() + cov_loss_a.item(), grad_norm
 
     @timeit
     def forward_batch_dt(self, data):
         """Forward pass of a batch"""
+        self.model.train()
         ## select only the last obs_len frames
         ic(len(data["past_frames"]))
         past_frames = [x.to(self.device) for x in data["past_frames"]][
@@ -397,7 +404,7 @@ class Learner:
         _, dt = self.model(past_frames, goal_direction)
 
         loss = self.criterion_dt(future_actions, action, dt_gt, dt)
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
         # gradient clipping
         if self.cfg.train_params.grad_clipping > 0:
@@ -405,7 +412,7 @@ class Learner:
                 self.model.parameters(), self.cfg.train_params.grad_clipping
             )
         # update
-        self.optimizer.step()
+        self.optimizer_dt.step()
         # check grad norm for debugging
         grad_norm = check_grad_norm(self.model)
 
@@ -423,9 +430,7 @@ class Learner:
             desc=f"Epoch {self.epoch:03}/{self.cfg.train_params.epochs:03}, validating",
         )
         activation = {}
-        self.model.image_encoder.layer4[-1].register_forward_hook(
-            get_activation(activation, "conv3")
-        )
+        hook_handler = self.model.image_encoder.layer4[-1].relu.register_forward_hook(get_activation(activation, 'conv3'))
         for data in bar:
             # move data to device
             past_frames = [x.to(self.device) for x in data["past_frames"]][
@@ -474,7 +479,7 @@ class Learner:
             running_loss5s.append(loss5s.item())
             running_loss3s.append(loss3s.item())
             bar.set_postfix(loss3s=loss3s.item(), loss5s=loss5s.item())
-
+        hook_handler.remove()
         bar.close()
 
         # average loss
@@ -504,7 +509,7 @@ class Learner:
                 attentions = activation["conv3"][idx].unsqueeze(0).detach()
                 attentions = np.mean(
                     torch.nn.functional.interpolate(
-                        attentions, scale_factor=(60, 80), mode="bicubic"
+                        attentions, scale_factor=(data['original_frame'][idx].shape[-3]/attentions.shape[-2], data['original_frame'][idx].shape[-2]/attentions.shape[-1]), mode="bicubic"
                     )
                     .squeeze()
                     .cpu()
@@ -757,7 +762,7 @@ class Learner:
                 action_type=cfg.action_type,
                 dropout=cfg.attn.dropout,
                 n_registers=cfg.attn.n_registers,
-            )
+            ).to(self.device)
 
             if cfg.action_backbone_weights:
                 weights = torch.load(
@@ -772,29 +777,16 @@ class Learner:
                 child.requires_grad_(False)
             action_encoder.eval()
 
-        if cfg.img_backbone.name.lower() == "dino":
-            # output dim: torch.Size([1, 384])
-            image_encoder = torch.hub.load(
-                "facebookresearch/dinov2", "dinov2_vits14_reg"
-            ).to(self.device)
-        elif "resnet" in cfg.img_backbone.name.lower():
+        if "resnet" in cfg.img_backbone.name.lower():
             weights = "DEFAULT" if self.cfg.model.img_backbone.pretrained else None
             print(
                 f"Using {cfg.img_backbone.name.upper()} as image backbone with weights {weights}!"
             )
             image_encoder = models.get_model(
-                cfg.img_backbone.name.lower(), weights=weights
+                cfg.img_backbone.name.lower(), weights=weights, zero_init_residual=True
             ).to(self.device)
             image_encoder.fc = torch.nn.Identity()
-        elif "efficient" in cfg.img_backbone.name.lower():
-            weights = "DEFAULT" if self.cfg.model.img_backbone.pretrained else None
-            print(
-                f"Using {cfg.img_backbone.name.upper()} as image backbone with weights {weights}!"
-            )
-            image_encoder = models.get_model(
-                cfg.img_backbone.name.lower(), weights=weights
-            ).to(self.device)
-            image_encoder.fc = torch.nn.Identity()
+
         if not self.cfg.model.img_backbone.pretrained:
             image_encoder.apply(init_weights(**self.cfg.init_model))
 
@@ -860,13 +852,14 @@ class Learner:
 
         # removing these config keys since they're no longer needed
         image_encoder.device = self.device
+        self.cfg.finetune = self.cfg.model_downstream.image_encoder.freeze_weights
         del self.cfg.model_downstream.image_encoder
         del self.cfg.model_downstream.goal_encoder
         del self.cfg.model_downstream.controller
         model = EndToEnd(
             image_encoder, goal_encoder, controller, **self.cfg.model_downstream
         )
-        model.image_compressor = pretext_model.image_compressor
+        model.image_compressor = copy.deepcopy(pretext_model.image_compressor)
 
         if (
             "cuda" in str(self.device)
@@ -876,6 +869,22 @@ class Learner:
 
         return model.to(self.device), pretext_model.to(self.device)
 
+    @torch.no_grad()
+    def update_weights(self):
+        self.model.image_encoder.load_state_dict(self.pretext_model.img_backbone.state_dict(), strict=False)
+        if self.cfg.finetune:
+            self.model.image_encoder.requires_grad_(False)
+
+        self.model.image_compressor.load_state_dict(self.pretext_model.image_compressor.state_dict(), strict=False)
+        if self.cfg.finetune:
+            self.model.image_compressor.requires_grad_(False)
+
+        self.model.controller.cls_token_emb.copy_(self.pretext_model.cls_token_emb)
+        if self.cfg.finetune:
+            self.model.controller.cls_token_emb.requires_grad_(False)
+        # copy the weights of the transformer as well, but don't freeze the weights
+        self.model.controller.transformer_encoder.load_state_dict(self.pretext_model.transformer_encoder.state_dict(),
+                                                                  strict=False)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

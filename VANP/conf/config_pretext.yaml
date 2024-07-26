@@ -6,8 +6,8 @@ train_params:
   device: cuda:0 # device name, values: "cpu" or "cuda:x" where 'x' is gpu index, or "cuda:a" to use all GPUs
   optimizer: adamw
   save_every: 100
-  grad_clipping: 0 # set to zero to disable grad clipping
-  start_saving_best: 9 # start epoch of saving best model
+  grad_clipping: 1.0 # set to zero to disable grad clipping
+  start_saving_best: 50 # start epoch of saving best model
   visualize_every: 1
   unfreeze_after: 1  # unfreeze action backbone
   base_lr: 0.2
@@ -16,12 +16,13 @@ train_params:
   temp_loss_lambda: 0.3 # weighting the temporal loss
   loss_lambda: 0.7 # weight for effectiveness of each term in pretext loss
   train_dt: 10 # train downstream task every train_dt epochs
+  accumulation_steps: 64 # multiplied by batch_size to increase batch_size without using memory
 
 # Logger parameters
 logger:
   workspace: General # workspace name
   project: VANP # project name
-  experiment_name: "exp11" # name of the experiment
+  experiment_name: exp11 # name of the experiment
   tags: "train"
   resume: False # (boolean) whether to resume training or not
   online: True # (boolean) whether to store logs online or not
@@ -30,6 +31,9 @@ logger:
   disabled: False # disable the comet ml
   upload_model: False # upload model to comet
   log_env_details: False
+  auto_histogram_weight_logging: True # allows you to enable/disable histogram logging for biases and weights
+  auto_histogram_gradient_logging: True # allows you to enable/disable automatic histogram logging of gradients
+  auto_histogram_activation_logging: True # allows you to enable/disable automatic histogram logging of activations
 
 # Dataloader parameters
 dataloader:
@@ -61,8 +65,8 @@ val_dataset:
 
 # directories
 directory:
-  model_name: "pretext18_exp4" # file name for saved model
-  save: VAM/checkpoint/pretext
+  model_name: "vanp18_exp11" # file name for saved model
+  save: VANP/checkpoint/pretext
   load: ""
 
 # models parameters
@@ -99,9 +103,6 @@ model:
     bn: True # use batchnorm?
     dropout: 0.2
     bias: False
-  vae_encoder: # VAE config for action encoder
-    hidden_dim: 256
-    latent_dim: 512
 
 model_downstream:
   action_type: ${model.action_type}  # whether to use low-level actions 'vw' or future poses 'xy'. options: ['vw', 'xy']
@@ -130,9 +131,9 @@ model_downstream:
     dropout: 0.2
     bias: False
   image_encoder:
-    name: resnet50 # options = ['dino', 'resnet18', 'resnet34', 'resnet50', 'vanp18', 'swin_v2_s', 'vit_b_16', 'efficientnet_v2_s']
+    name: ${model.img_backbone.name} # options = ['dino', 'resnet18', 'resnet34', 'resnet50', 'vanp18', 'swin_v2_s', 'vit_b_16', 'efficientnet_v2_s']
     weights: DEFAULT # valid for models from torchvision, options: DEFAULT, null
-    vanp_weights: VAM/checkpoint/vanp/exp6-resnet50-pretrained-01-08-15-17-E1000.pth  # pass in the VANP weight path
+    vanp_weights: VANP/checkpoint/vanp/exp6-resnet50-pretrained-01-08-15-17-E1000.pth  # pass in the VANP weight path
     freeze_weights: True # whether to freeze weights during downstream training or not (to finetune, set this to False)
 
 barlow_loss:
@@ -142,13 +143,13 @@ barlow_loss:
 
 vicreg_loss:
   sim_coeff: 25.0
-  std_coeff: 25.0
-  cov_coeff: 1.0
+  std_coeff: 0.5
+  cov_coeff: 25.0
 # model initializer
 init_model:
   method: "kaiming_normal" # kaiming_normal, kaiming_uniform, normal, uniform, xavier_normal, xavier_uniform
-  mean: 0.0 # mean of normal distribution
-  std: 1.0 # standard deviation for normal distribution
+  mean: 0.01 # mean of normal distribution
+  std: 0.7 # standard deviation for normal distribution
   low: 0.0 # minimum threshold for uniform distribution
   high: 1.0 # maximum threshold for uniform distribution
   mode: "fan_in" # either 'fan_in' (default) or 'fan_out'. Choosing 'fan_in' preserves the magnitude of the variance of the weights in the forward pass. Choosing 'fan_out' preserves the magnitudes in the backwards pass.
@@ -167,5 +168,14 @@ adamw:
     - 0.9
     - 0.999
   eps: 1e-8
-  weight_decay: 0
+  weight_decay: 0.03
+  amsgrad: False
+
+adam:
+  lr: 5e-4
+  betas:
+    - 0.9
+    - 0.999
+  eps: 1e-8
+  weight_decay: 0.03
   amsgrad: False

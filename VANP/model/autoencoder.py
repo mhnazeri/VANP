@@ -25,75 +25,6 @@ class Autoencoder(nn.Module):
         return z, x_hat
 
 
-class VAE(nn.Module):
-    def __init__(self, encoder, decoder, action_type: str = "xy"):
-        super().__init__()
-        self.action_type = action_type
-        self.encoder = encoder
-        self.decoder = decoder
-
-    def reparameterization(self, mean, var):
-        epsilon = torch.randn_like(var).to(mean.device)  # sampling epsilon
-        z = mean + var * epsilon  # reparameterization trick
-        return z
-
-    def forward(self, x):
-        B, T, L = x.shape
-        mean, log_var = self.encoder(x.view(B, -1))
-        z = self.reparameterization(
-            mean, torch.exp(0.5 * log_var)
-        )  # takes exponential function (log var -> var)
-        x_hat = self.decoder(z)
-        x_hat = x_hat.view(B, T, L)
-        if self.action_type == "xy":
-            x_hat[:, :, :2] = torch.cumsum(
-                x_hat[:, :, :2], dim=1
-            )  # convert deltas to positions
-            if L > 2:
-                x_hat[:, :, 2:] = torch.nn.functional.normalize(
-                    x_hat[:, :, 2:].clone(), dim=-1
-                )  # normalize the angle prediction
-
-        return x_hat, z, mean, log_var
-
-
-class Encoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim, latent_dim):
-        super().__init__()
-
-        self.FC_input = nn.Linear(input_dim, hidden_dim)
-        self.FC_input2 = nn.Linear(hidden_dim, hidden_dim)
-        self.FC_mean = nn.Linear(hidden_dim, latent_dim)
-        self.FC_var = nn.Linear(hidden_dim, latent_dim)
-
-        self.LeakyReLU = nn.LeakyReLU(0.2)
-
-    def forward(self, x):
-        h_ = self.LeakyReLU(self.FC_input(x))
-        h_ = self.LeakyReLU(self.FC_input2(h_))
-        mean = self.FC_mean(h_)
-        log_var = self.FC_var(h_)  # encoder produces mean and log of variance
-
-        return mean, log_var
-
-
-class Decoder(nn.Module):
-    def __init__(self, latent_dim, hidden_dim, output_dim):
-        super().__init__()
-        self.FC_hidden = nn.Linear(latent_dim, hidden_dim)
-        self.FC_hidden2 = nn.Linear(hidden_dim, hidden_dim)
-        self.FC_output = nn.Linear(hidden_dim, output_dim)
-
-        self.LeakyReLU = nn.LeakyReLU(0.2)
-
-    def forward(self, x):
-        h = self.LeakyReLU(self.FC_hidden(x))
-        h = self.LeakyReLU(self.FC_hidden2(h))
-
-        x_hat = torch.sigmoid(self.FC_output(h))
-        return x_hat
-
-
 class PatchEmbedding(nn.Module):
     def __init__(self, d_model: int, n_action: int):
         super().__init__()
@@ -135,10 +66,8 @@ class RegressionHead(nn.Module):
         self.linear2 = nn.Linear(d_hidden, n_action)
 
     def forward(self, x: torch.Tensor):
-        # print("Inside regression head, before:", f"{x.shape = }")
         x = self.activation(self.linear1(x))
         x = self.linear2(x)
-        # print("Inside regression head, after:", f"{x.shape = }")
         return x
 
 
@@ -159,7 +88,7 @@ class Transformer(nn.Module):
         self.action_type = action_type
         self.d_model = d_model
         transformer_encoder_layer = nn.TransformerEncoderLayer(
-            d_model, n_head, d_hidden, dropout, batch_first=True
+            d_model, n_head, d_hidden, dropout, activation='gelu', batch_first=True, norm_first=True
         )
         self.transformer_encoder = nn.TransformerEncoder(
             transformer_encoder_layer, n_layers
@@ -186,18 +115,14 @@ class Transformer(nn.Module):
         # create the cls token
         cls_token_emb = self.cls_token_emb.expand(B, -1, -1)
         reg_token_emb = self.reg_token_emb.expand(B, -1, -1)
-        # print(f"{reg_token_emb.shape = }")
         # concat the cls token to the beginning of the sequence
         x = torch.cat([cls_token_emb, x, reg_token_emb], dim=1)
-        # print(f"{x.shape = }")
         # add positional encodings
         x = self.positional_encoding(x)
         # pass to the transformer
         x = self.transformer_encoder(x)
-        # print("After transformer", f"{x.shape = }")
         # retrieve cls token
         cls = x[:, 0, :]
-        # print("CLS token", f"{x.shape = }")
         # pass through layer norm
         cls = self.ln(cls)
         # reconstruct actions

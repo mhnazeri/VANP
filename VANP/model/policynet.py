@@ -29,7 +29,7 @@ class TransformerPolicy(nn.Module):
         super().__init__()
         self.pos_encoder = PositionalEncoding(d_model, dropout)
         encoder_layers = nn.TransformerEncoderLayer(
-            d_model, nhead, d_hid, dropout, batch_first=True
+            d_model, nhead, d_hid, dropout, activation='gelu', batch_first=True, norm_first=True
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers)
         self.controller = controller

@@ -43,27 +43,13 @@ def vicreg_loss(
     ).pow_(2).sum().div_(z2.shape[1])
 
     loss = sim_coeff * repr_loss + std_coeff * std_loss + cov_coeff * cov_loss
-    return loss
+    return loss, (repr_loss, std_loss, cov_loss)
 
 
 def off_diagonal(x):
     n, m = x.shape
     assert n == m
     return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
-
-
-class VAELoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x, x_hat, mean, log_var):
-        x = (x - x.min()) / (x.max() - x.min())
-        reproduction_loss = nn.functional.binary_cross_entropy(
-            x_hat, x, reduction="sum"
-        )
-        KLD = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
-
-        return reproduction_loss + KLD
 
 
 class EndToEndLoss(nn.Module):

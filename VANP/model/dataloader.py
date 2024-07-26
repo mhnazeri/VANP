@@ -4,7 +4,7 @@ from typing import Union
 import copy
 
 import cv2
-from PIL import Image
+from PIL import Image, ImageOps, ImageFilter
 import numpy as np
 import math
 import torch
@@ -31,6 +31,40 @@ def imread(address: str):
     return Image.fromarray(img)
 
 
+class GaussianBlur(object):
+    def __init__(self, p):
+        self.p = p
+
+    def __call__(self, img):
+        if np.random.rand() < self.p:
+            sigma = np.random.rand() * 1.9 + 0.1
+            return img.filter(ImageFilter.GaussianBlur(sigma))
+        else:
+            return img
+
+
+class Solarization(object):
+    def __init__(self, p):
+        self.p = p
+
+    def __call__(self, img):
+        if np.random.rand() < self.p:
+            return ImageOps.solarize(img)
+        else:
+            return img
+
+
+class Solarization(object):
+    def __init__(self, p):
+        self.p = p
+
+    def __call__(self, img):
+        if np.random.rand() < self.p:
+            return ImageOps.solarize(img)
+        else:
+            return img
+
+
 class SocialNavDataset(Dataset):
     def __init__(
         self,
@@ -55,8 +89,24 @@ class SocialNavDataset(Dataset):
         if self.train:
             self.transform = transforms.Compose(
                 [
+                    # Crop(self.crop),
+                    transforms.RandomResizedCrop(
+                        224, interpolation=transforms.InterpolationMode.BICUBIC
+                    ),
                     transforms.Resize(self.resize, antialias=True),
+                    transforms.RandomHorizontalFlip(p=0.5),
                     transforms.RandomAutocontrast(p=0.4),
+                    transforms.RandomApply(
+                        [
+                            transforms.ColorJitter(
+                                brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1
+                            )
+                        ],
+                        p=0.8,
+                    ),
+                    transforms.RandomGrayscale(p=0.2),
+                    GaussianBlur(p=0.6),
+                    Solarization(p=0.5),
                     transforms.ToTensor(),
                     transforms.Normalize(
                         mean=[0.485, 0.456, 0.406],  # ImageNet mean hardcoded

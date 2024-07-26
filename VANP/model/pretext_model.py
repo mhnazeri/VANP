@@ -80,7 +80,7 @@ class PretextModel(nn.Module):
         self.projector = Projector(feature_size, hidden_dim, projection_dim)
         # Transformer module
         transformer_encoder_layer = nn.TransformerEncoderLayer(
-            feature_size, nhead, hidden_dim, 0.4, batch_first=True
+            feature_size, nhead, hidden_dim, dropout=0.4, activation='gelu', batch_first=True, norm_first=True
         )
         self.transformer_encoder = nn.TransformerEncoder(
             transformer_encoder_layer, num_layers
@@ -106,7 +106,7 @@ class PretextModel(nn.Module):
             [self.image_compressor(self.img_backbone(frame)) for frame in frames], dim=1
         )  # (B, T, L)
 
-        img_embed = frames[:, -1]
+        img_embed = frames[:, -1].clone()
         ctx_token_emb = self.ctx_token_emb.expand(B, -1, -1)
         tokens = [ctx_token_emb, frames]
         if self.n_registers > 0:
