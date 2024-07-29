@@ -44,7 +44,7 @@ dataloader:
 
 # Train dataset parameters
 dataset:
-  root: Data/Train/samples_6_20.pkl # samples.pkl directory
+  root: Data/Train/samples.pkl # samples.pkl directory
   train: True # train data
   metric_waypoint_spacing: 1.0
   only_non_linear: False  # whether to train on non-linear trajectories or not
@@ -54,7 +54,7 @@ dataset:
 
 # Validation dataset parameters/ only change parameters that are different from train data
 val_dataset:
-  root: Data/Valid/samples_6_20.pkl # samples.pkl directory
+  root: Data/Val/samples.pkl # samples.pkl directory
   train: False
   metric_waypoint_spacing: ${dataset.metric_waypoint_spacing}
   only_non_linear: False  # whether to train on non-linear trajectories or not
@@ -133,7 +133,7 @@ model_downstream:
   image_encoder:
     name: ${model.img_backbone.name} # options = ['dino', 'resnet18', 'resnet34', 'resnet50', 'vanp18', 'swin_v2_s', 'vit_b_16', 'efficientnet_v2_s']
     weights: DEFAULT # valid for models from torchvision, options: DEFAULT, null
-    vanp_weights: VANP/checkpoint/vanp/exp6-resnet50-pretrained-01-08-15-17-E1000.pth  # pass in the VANP weight path
+    vanp_weights: VANP/checkpoint/vanp/exp6-resnet50-pretrained.pth  # pass in the VANP weight path
     freeze_weights: True # whether to freeze weights during downstream training or not (to finetune, set this to False)
 
 barlow_loss:
@@ -179,3 +179,20 @@ adam:
   eps: 1e-8
   weight_decay: 0.03
   amsgrad: False
+
+# RMSprop parameters if using RMSprop optimizer
+rmsprop:
+  lr: 1e-3
+  momentum: 0
+  alpha: 0.99
+  eps: 1e-8
+  centered: False
+  weight_decay: 0
+
+# SGD parameters if using SGD optimizer
+sgd:
+  lr: 5e-2
+  momentum: 0 # momentum factor
+  weight_decay: 0 # weight decay (L2 penalty)
+  dampening: 0 # dampening for momentum
+  nesterov: False # enables Nesterov momentum

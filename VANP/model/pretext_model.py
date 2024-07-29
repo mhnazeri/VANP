@@ -47,7 +47,8 @@ class PretextModel(nn.Module):
         corr_neg_one: bool = True,
         n_registers: int = 4,
         nhead: int = 4,
-        num_layers: int = 4
+        num_layers: int = 4,
+        obs_len: int = 6
     ):
         super().__init__()
         self.lamda = lamda
@@ -85,7 +86,7 @@ class PretextModel(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(
             transformer_encoder_layer, num_layers
         )
-        self.positional_encoding = PositionalEncoding(feature_size)
+        self.positional_encoding = PositionalEncoding(feature_size, obs_len + 1 + n_registers)
 
         # cls token to save the context
         self.ctx_token_emb = nn.Parameter(

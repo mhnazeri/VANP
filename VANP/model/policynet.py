@@ -3,6 +3,8 @@ import math
 import torch
 import torch.nn as nn
 
+from VANP.model.autoencoder import PositionalEncoding
+
 
 class TransformerPolicy(nn.Module):
     """Defines a transformer as the policy network"""
@@ -15,6 +17,7 @@ class TransformerPolicy(nn.Module):
         d_hid: int = 512,
         num_layers: int = 4,
         dropout: float = 0.5,
+        obs_len: int = 6,
         n_registers: int = 4,
     ) -> None:
         """
@@ -27,7 +30,7 @@ class TransformerPolicy(nn.Module):
             dropout: (float) dropout rate
         """
         super().__init__()
-        self.pos_encoder = PositionalEncoding(d_model, dropout)
+        self.pos_encoder = PositionalEncoding(d_model, obs_len + n_registers + 2)
         encoder_layers = nn.TransformerEncoderLayer(
             d_model, nhead, d_hid, dropout, activation='gelu', batch_first=True, norm_first=True
         )
@@ -106,26 +109,3 @@ class MLPPolicy(nn.Module):
         actions = self.controller(src)
         temp_distance = self.temp_predictor(src)
         return actions, temp_distance
-
-
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 1024) -> None:
-        super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model)
-        )
-        # broadcast over t dim.
-        pe = torch.zeros(max_len, 1, d_model)
-        pe[:, 0, 0::2] = torch.sin(position * div_term)
-        pe[:, 0, 1::2] = torch.cos(position * div_term)
-        self.register_buffer("pe", pe)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: (torch.Tensor) shape [B, seq_len, embedding_dim]
-        """
-        x = x + self.pe[: x.size(0)]
-        return x

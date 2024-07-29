@@ -827,13 +827,13 @@ class Learner:
             # initialize the transformer policy
             controller = TransformerPolicy(
                 controller,
-                self.cfg.model_downstream.obs_context_size,
-                self.cfg.model_downstream.nhead,
-                self.cfg.model_downstream.d_hid,
-                self.cfg.model_downstream.num_layers,
-                self.cfg.model_downstream.dropout,
-                self.cfg.model_downstream.obs_len,
-                self.cfg.model_downstream.n_registers,
+                d_model=self.cfg.model_downstream.obs_context_size,
+                nhead=self.cfg.model_downstream.nhead,
+                d_hid=self.cfg.model_downstream.d_hid,
+                num_layers=self.cfg.model_downstream.num_layers,
+                dropout=self.cfg.model_downstream.dropout,
+                obs_len=self.cfg.model_downstream.obs_len,
+                n_registers=self.cfg.model_downstream.n_registers,
             )
         elif self.cfg.model_downstream.policy == "avg":
             controller = PoolingPolicy(
@@ -879,9 +879,9 @@ class Learner:
         if self.cfg.finetune:
             self.model.image_compressor.requires_grad_(False)
 
-        self.model.controller.cls_token_emb.copy_(self.pretext_model.cls_token_emb)
+        self.model.controller.ctx_token_emb.copy_(self.pretext_model.ctx_token_emb)
         if self.cfg.finetune:
-            self.model.controller.cls_token_emb.requires_grad_(False)
+            self.model.controller.ctx_token_emb.requires_grad_(False)
         # copy the weights of the transformer as well, but don't freeze the weights
         self.model.controller.transformer_encoder.load_state_dict(self.pretext_model.transformer_encoder.state_dict(),
                                                                   strict=False)

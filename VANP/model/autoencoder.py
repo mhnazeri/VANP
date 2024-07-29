@@ -49,13 +49,12 @@ class PositionalEncoding(nn.Module):
         super().__init__()
         # we need 1 to broadcast along the time dimension
         self.positional_encoding = nn.Parameter(
-            torch.zeros(max_len, 1, d_model), requires_grad=True
+            torch.randn(1, max_len, d_model), requires_grad=True
         )
 
     def forward(self, x: torch.Tensor):
         # calculate the positional encoding
-        pe = self.positional_encoding[: x.shape[0]]
-        return x + pe
+        return x + self.positional_encoding
 
 
 class RegressionHead(nn.Module):
@@ -94,7 +93,7 @@ class Transformer(nn.Module):
             transformer_encoder_layer, n_layers
         )
         self.patch_embedding = PatchEmbedding(d_model, n_action)
-        self.positional_encoding = PositionalEncoding(d_model)
+        self.positional_encoding = PositionalEncoding(d_model, pred_len + 1 + n_registers)
         self.regression_head = RegressionHead(d_model, d_hidden, pred_len * n_action)
 
         # cls token to save the context

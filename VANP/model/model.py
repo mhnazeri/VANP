@@ -19,6 +19,11 @@ class EndToEnd(nn.Module):
         action_type: str = "xy",
         obs_context_size: int = 512,  # observation context size
         policy: str = "avg",
+        nhead: int = 4,  # number of heads for mha
+        d_hid: int = 512,  # dimensionality of the hidden layers
+        num_layers: int = 4,  # the number of sub-encoder-layers in the encoder
+        dropout: float = 0.5,  # dropout rate
+        n_registers: int = 4,
     ):
         super().__init__()
         assert policy.lower() in [
