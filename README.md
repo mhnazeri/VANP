@@ -20,12 +20,6 @@ This repository contains three components: (1) the code to [parse](https://githu
 * Jul 26, 2024: added more augmentation and gradient accumulation for better performance.
 * Jul 26, 2024: code cleanup, and general bug fixes.
 
-## Applying on Your Data
-* If you want to apply VANP on your dataset, please make sure that your data does not contain static sequences (sequences without change between frames) for better results. Please read the limitation section of the paper.
-* Removing the action head is possible, but generally not advised, at least have it for warmup.
-* You can change the hyperparameters in the [config](VANP/conf/config_pretext.yaml) file, and the [level of augmentations](https://github.com/mhnazeri/VANP/blob/a1af2922edf1a910359f2976c236bb459a3ad202/VANP/model/dataloader.py#L89) in the [dataloader](https://github.com/mhnazeri/VANP/blob/main/VANP/model/dataloader.py) to improve the results.
-* You can add embedding spaces from other models such as [Segment Anything](https://ai.meta.com/sam2/) and [Depth Anything](https://github.com/DepthAnything/Depth-Anything-V2) in [this section](https://github.com/mhnazeri/VANP/blob/a1af2922edf1a910359f2976c236bb459a3ad202/VANP/train_pretext.py#L334) of the code to enrich the embedding space even with more information.
-
 ## Installation
 Main libraries:
 * [PyTorch](https://www.pytorch.org/): as the main ML framework
@@ -46,6 +40,12 @@ To set up Comet.Ml follow the [official documentations](https://www.comet.ml/doc
 
 ## Dataset
 We used [MuSoHu](https://cs.gmu.edu/~xiao/Research/MuSoHu/) and [SCAND](https://www.cs.utexas.edu/~xiao/SCAND/SCAND.html). Please follow [this](docs/data_parser.md) guide to download and parse the datasets.
+
+## Applying on Your Data
+* If you want to apply VANP on your dataset, please make sure that your data does not contain static sequences (sequences without change between frames) for better results. Please read the limitation section of the paper.
+* Removing the action head is possible, but generally not advised, at least have it for warmup.
+* You can change the hyperparameters in the [config](VANP/conf/config_pretext.yaml) file, and the [level of augmentations](https://github.com/mhnazeri/VANP/blob/a1af2922edf1a910359f2976c236bb459a3ad202/VANP/model/dataloader.py#L89) in the [dataloader](https://github.com/mhnazeri/VANP/blob/main/VANP/model/dataloader.py) to improve the results.
+* You can add embedding spaces from other models such as [Segment Anything](https://ai.meta.com/sam2/) and [Depth Anything](https://github.com/DepthAnything/Depth-Anything-V2) in [this section](https://github.com/mhnazeri/VANP/blob/a1af2922edf1a910359f2976c236bb459a3ad202/VANP/train_pretext.py#L334) of the code to enrich the embedding space even with more information.
 
 ## Model Training
 <p align="center">
