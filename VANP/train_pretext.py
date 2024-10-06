@@ -341,7 +341,7 @@ class Learner:
             self.cfg.train_params.loss_lambda * loss_vision
             + (1 - self.cfg.train_params.loss_lambda) * loss_action
         )
-        self.optimizer.zero_grad(set_to_none=True)
+        
         loss.backward()
         # gradient clipping
         if self.cfg.train_params.grad_clipping > 0:
